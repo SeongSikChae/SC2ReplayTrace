@@ -5,12 +5,17 @@ public sealed class VersionedBitPackedDecoder
 {
     private readonly BitPackedBuffer _buffer;
 
+    /// <summary>지정한 버전 스트림을 디코더에 연결합니다.</summary>
+    /// <param name="contents">디코드할 내용입니다.</param>
     public VersionedBitPackedDecoder(ReadOnlyMemory<byte> contents) =>
         _buffer = new BitPackedBuffer(contents);
 
+    /// <summary>스트림이 끝났는지 나타냅니다.</summary>
     public bool Done => _buffer.Done;
+    /// <summary>현재까지 사용한 비트 수입니다.</summary>
     public int UsedBits => _buffer.UsedBits;
 
+    /// <summary>가변 길이 정수를 읽습니다.</summary>
     public int ReadVInt()
     {
         var first = _buffer.ReadBits(8);
@@ -27,12 +32,14 @@ public sealed class VersionedBitPackedDecoder
         return checked((int)(negative ? -result : result));
     }
 
+    /// <summary>길이 접두사가 있는 바이트 배열을 읽습니다.</summary>
     public byte[] ReadBlob()
     {
         Expect(2);
         return _buffer.ReadAlignedBytes(ReadVInt());
     }
 
+    /// <summary>비트 배열을 읽습니다.</summary>
     public byte[] ReadBitArray()
     {
         Expect(1);
@@ -40,18 +47,21 @@ public sealed class VersionedBitPackedDecoder
         return _buffer.ReadAlignedBytes((bits + 7) / 8);
     }
 
+    /// <summary>FourCC 문자열을 읽습니다.</summary>
     public string ReadFourCc()
     {
         Expect(7);
         return System.Text.Encoding.ASCII.GetString(_buffer.ReadAlignedBytes(4));
     }
 
+    /// <summary>불리언 값을 읽습니다.</summary>
     public bool ReadBool()
     {
         Expect(6);
         return _buffer.ReadBits(8) != 0;
     }
 
+    /// <summary>현재 인스턴스를 읽지 않고 건너뜁니다.</summary>
     public void SkipInstance()
     {
         switch (_buffer.ReadBits(8))

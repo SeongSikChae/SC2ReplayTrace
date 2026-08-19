@@ -9,7 +9,7 @@ namespace Biz.Bizadm.SC2ReplayTrace;
 public sealed class Sc2ReplayParser
 {
     /// <summary>파일 경로에서 리플레이를 읽습니다.</summary>
-    public async Task<ReplayTrace> ParseAsync(string replayPath, CancellationToken cancellationToken = default)
+    public static async Task<ReplayTrace> ParseAsync(string replayPath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(replayPath);
         await using var stream = File.OpenRead(replayPath);
@@ -17,14 +17,14 @@ public sealed class Sc2ReplayParser
     }
 
     /// <summary>호출자가 소유한 스트림에서 리플레이를 읽습니다.</summary>
-    public async Task<ReplayTrace> ParseAsync(Stream replayStream, CancellationToken cancellationToken = default)
+    public static async Task<ReplayTrace> ParseAsync(Stream replayStream, CancellationToken cancellationToken = default)
     {
         var streams = await ParseRawAsync(replayStream, cancellationToken).ConfigureAwait(false);
         return TraceNormalizer.Normalize(new RawReplay(streams.Files));
     }
 
     /// <summary>MPQ 컨테이너에서 공식 s2protocol 스트림을 추출합니다.</summary>
-    public async Task<ReplayStreams> ParseRawAsync(Stream replayStream, CancellationToken cancellationToken = default)
+    public static async Task<ReplayStreams> ParseRawAsync(Stream replayStream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(replayStream);
         if (!replayStream.CanRead || !replayStream.CanSeek)
@@ -103,7 +103,7 @@ internal static class TraceNormalizer
             new ReplayRawData(header, details, initData, gameEvents, messageEvents, attributes));
     }
 
-    private static IReadOnlyList<RawReplayEvent> DecodeEvents(
+    private static RawReplayEvent[] DecodeEvents(
         ProtocolSchema schema,
         IReadOnlyDictionary<string, byte[]> streams,
         string streamName,
@@ -141,12 +141,12 @@ internal static class TraceNormalizer
         return null;
     }
 
-    private static JsonNode? DecodeAttributes(IReadOnlyDictionary<string, byte[]> streams) =>
+    private static JsonValue? DecodeAttributes(IReadOnlyDictionary<string, byte[]> streams) =>
         streams.ContainsKey("replay.attributes.events")
             ? JsonValue.Create(Convert.ToBase64String(streams["replay.attributes.events"]))
             : null;
 
-    private static IReadOnlyList<ReplayPlayer> ReadPlayers(JsonNode? details)
+    private static ReplayPlayer[] ReadPlayers(JsonNode? details)
     {
         var players = FindArray(details, "m_playerList", "m_players", "players");
         return players.Select((player, index) => new ReplayPlayer(
@@ -192,7 +192,7 @@ internal static class TraceNormalizer
         return null;
     }
 
-    private static IEnumerable<JsonNode?> FindArray(JsonNode? node, params string[] names)
+    private static JsonArray FindArray(JsonNode? node, params string[] names)
     {
         var value = FindNode(node, names);
         return value is JsonArray array ? array : [];
@@ -273,8 +273,7 @@ internal static class TraceNormalizer
         PositionState state)
     {
         var first = FindInt(node, "m_firstUnitIndex") ?? 0;
-        var items = FindNode(node, "m_items") as JsonArray;
-        if (items is null) return;
+        if (FindNode(node, "m_items") is not JsonArray items) return;
         var unitIndex = first;
         for (var offset = 0; offset + 2 < items.Count; offset += 3)
         {
@@ -297,6 +296,8 @@ internal static class TraceNormalizer
     }
 }
 
+/// <summary>MPQ에서 추출한 리플레이 스트림입니다.</summary>
+/// <param name="Files">스트림 이름과 원시 바이트의 매핑입니다.</param>
 public sealed record ReplayStreams(IReadOnlyDictionary<string, byte[]> Files);
 
 internal sealed record RawReplay(IReadOnlyDictionary<string, byte[]> Streams);

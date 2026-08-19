@@ -13,6 +13,10 @@ public sealed class SchemaValueDecoder
     private readonly BitPackedBuffer _packed;
     private readonly bool _isVersioned;
 
+    /// <summary>스키마와 프로토콜 스트림을 사용해 디코더를 만듭니다.</summary>
+    /// <param name="schema">프로토콜 스키마입니다.</param>
+    /// <param name="contents">디코드할 내용입니다.</param>
+    /// <param name="isVersioned">버전 스트림인지 나타냅니다.</param>
     public SchemaValueDecoder(ProtocolSchema schema, ReadOnlyMemory<byte> contents, bool isVersioned)
     {
         _schema = schema;
@@ -21,8 +25,12 @@ public sealed class SchemaValueDecoder
         _packed = new BitPackedBuffer(contents);
     }
 
+    /// <summary>스트림이 끝났는지 나타냅니다.</summary>
     public bool IsDone => _isVersioned ? _versioned.Done : _packed.Done;
 
+    /// <summary>지정한 스키마 타입의 값을 디코드합니다.</summary>
+    /// <param name="typeName">스키마 타입 이름입니다.</param>
+    /// <returns>디코드된 JSON 값입니다.</returns>
     public JsonNode? Decode(string typeName) =>
         DecodeType(_schema.FindType(typeName)
             ?? throw new InvalidOperationException($"스키마 타입을 찾을 수 없습니다: {typeName}"));

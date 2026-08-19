@@ -31,10 +31,14 @@ using System.Text.Json.Nodes;
 
 namespace Biz.Bizadm.SC2ReplayTrace.Protocol.Generated;
 
+/// <summary>생성된 tracker 이벤트가 구현하는 공통 인터페이스입니다.</summary>
 public interface IGeneratedTrackerEvent
 {
+    /// <summary>공식 이벤트 이름입니다.</summary>
     string EventName { get; }
+    /// <summary>이름으로 정수 필드 값을 가져옵니다.</summary>
     int? GetInt(string name);
+    /// <summary>이름으로 문자열 필드 값을 가져옵니다.</summary>
     string? GetString(string name);
 }
 
@@ -44,14 +48,18 @@ foreach (var declaration in tracker)
 {
     var fullName = declaration.GetProperty("fullname").GetString()!;
     var className = "S" + Sanitize(fullName[(fullName.LastIndexOf('.') + 1)..]);
+    source.AppendLine("/// <summary>공식 스키마에서 생성된 tracker 이벤트입니다.</summary>");
     source.AppendLine($"public sealed partial class {className} : IGeneratedTrackerEvent");
     source.AppendLine("{");
+    source.AppendLine("    /// <summary>공식 이벤트 이름입니다.</summary>");
     source.AppendLine($"    public string EventName => \"{fullName}\";");
     foreach (var field in declaration.GetProperty("type_info").GetProperty("fields").EnumerateArray())
     {
         var name = field.GetProperty("name").GetString()!;
+        source.AppendLine($"    /// <summary>공식 이벤트 필드 <c>{name}</c>입니다.</summary>");
         source.AppendLine($"    public {TypeName(field.GetProperty("type_info"))}? {Sanitize(name)} {{ get; init; }}");
     }
+    source.AppendLine("    /// <summary>이름으로 정수 필드 값을 가져옵니다.</summary>");
     source.AppendLine("    public int? GetInt(string name) => name switch");
     source.AppendLine("    {");
     foreach (var field in declaration.GetProperty("type_info").GetProperty("fields").EnumerateArray())
@@ -62,6 +70,7 @@ foreach (var declaration in tracker)
     }
     source.AppendLine("        _ => null");
     source.AppendLine("    };");
+    source.AppendLine("    /// <summary>이름으로 문자열 필드 값을 가져옵니다.</summary>");
     source.AppendLine("    public string? GetString(string name) => name switch");
     source.AppendLine("    {");
     foreach (var field in declaration.GetProperty("type_info").GetProperty("fields").EnumerateArray())
@@ -72,6 +81,7 @@ foreach (var declaration in tracker)
     }
     source.AppendLine("        _ => null");
     source.AppendLine("    };");
+    source.AppendLine("    /// <summary>JSON 노드에서 이벤트를 생성합니다.</summary>");
     source.AppendLine("    public static " + className + " FromJson(JsonNode node) => new()");
     source.AppendLine("    {");
     foreach (var field in declaration.GetProperty("type_info").GetProperty("fields").EnumerateArray())
@@ -84,8 +94,10 @@ foreach (var declaration in tracker)
     source.AppendLine("}");
 }
 
+source.AppendLine("/// <summary>생성된 tracker 이벤트를 생성합니다.</summary>");
 source.AppendLine("public static class GeneratedTrackerEventFactory");
 source.AppendLine("{");
+source.AppendLine("    /// <summary>공식 이벤트 이름에 해당하는 이벤트를 생성합니다.</summary>");
 source.AppendLine("    public static IGeneratedTrackerEvent? Create(string eventName, JsonNode data) => eventName switch");
 source.AppendLine("    {");
 foreach (var declaration in tracker)
@@ -98,6 +110,7 @@ source.AppendLine("        _ => null");
 source.AppendLine("    };");
 source.AppendLine("}");
 
+source.AppendLine("/// <summary>공식 프로토콜 이벤트 매핑을 제공합니다.</summary>");
 source.AppendLine("public static class GeneratedProtocolMaps");
 source.AppendLine("{");
 AppendEventMap("GameEventTypes", "game_event_types");
@@ -127,6 +140,7 @@ IEnumerable<JsonElement> EnumerateObjects(JsonElement element)
 
 void AppendEventMap(string propertyName, string pythonName)
 {
+    source.AppendLine($"    /// <summary>{pythonName} 이벤트 매핑입니다.</summary>");
     source.AppendLine($"public static IReadOnlyDictionary<int, (int TypeId, string Name)> {propertyName} {{ get; }} = new Dictionary<int, (int, string)>");
     source.AppendLine("{");
     if (File.Exists(pythonFile))

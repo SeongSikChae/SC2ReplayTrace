@@ -1,5 +1,6 @@
 namespace Biz.Bizadm.SC2ReplayTrace.Protocol;
 
+/// <summary>비트 단위로 데이터를 읽는 버퍼입니다.</summary>
 public sealed class BitPackedBuffer
 {
     private readonly ReadOnlyMemory<byte> _data;
@@ -7,14 +8,22 @@ public sealed class BitPackedBuffer
     private int _next;
     private int _nextBits;
 
+    /// <summary>지정한 데이터를 사용해 버퍼를 만듭니다.</summary>
+    /// <param name="data">읽을 데이터입니다.</param>
     public BitPackedBuffer(ReadOnlyMemory<byte> data) => _data = data;
 
+    /// <summary>현재까지 사용한 비트 수입니다.</summary>
     public int UsedBits => _offset * 8 - _nextBits;
 
+    /// <summary>읽을 데이터가 모두 소비되었는지 나타냅니다.</summary>
     public bool Done => _nextBits == 0 && _offset >= _data.Length;
 
+    /// <summary>다음 바이트 경계로 이동합니다.</summary>
     public void Align() => _nextBits = 0;
 
+    /// <summary>지정한 비트 수를 읽습니다.</summary>
+    /// <param name="count">읽을 비트 수입니다.</param>
+    /// <returns>읽은 값입니다.</returns>
     public int ReadBits(int count)
     {
         if (count is < 0 or > 31) throw new ArgumentOutOfRangeException(nameof(count));
@@ -39,6 +48,9 @@ public sealed class BitPackedBuffer
         return result;
     }
 
+    /// <summary>바이트 경계에서 지정한 바이트 수를 읽습니다.</summary>
+    /// <param name="count">읽을 바이트 수입니다.</param>
+    /// <returns>읽은 바이트입니다.</returns>
     public byte[] ReadAlignedBytes(int count)
     {
         Align();

@@ -4,6 +4,7 @@ using System.Text;
 
 namespace Biz.Bizadm.SC2ReplayTrace.Mpq;
 
+/// <summary>MPQ 아카이브에서 파일을 읽습니다.</summary>
 public sealed class MpqArchive : IDisposable
 {
     private const uint MpqSignature = 0x1A51504D;
@@ -19,8 +20,11 @@ public sealed class MpqArchive : IDisposable
     private readonly long _archiveOffset;
     private bool _disposed;
 
+    /// <summary>아카이브 앞부분의 사용자 데이터입니다.</summary>
     public byte[]? UserData { get; }
 
+    /// <summary>지정한 스트림에서 MPQ 아카이브를 엽니다.</summary>
+    /// <param name="stream">읽을 MPQ 스트림입니다.</param>
     public MpqArchive(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -57,6 +61,9 @@ public sealed class MpqArchive : IDisposable
         _ = archiveSize;
     }
 
+    /// <summary>아카이브 내부 파일을 읽습니다.</summary>
+    /// <param name="name">내부 파일 이름입니다.</param>
+    /// <returns>압축 해제된 파일 내용입니다.</returns>
     public byte[] ReadFile(string name)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -90,6 +97,7 @@ public sealed class MpqArchive : IDisposable
         return output.ToArray();
     }
 
+    /// <summary>아카이브를 폐기합니다.</summary>
     public void Dispose()
     {
         _disposed = true;

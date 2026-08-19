@@ -49,7 +49,7 @@ public sealed class ProtocolTests
 
         var parser = new Sc2ReplayParser();
         await using var stream = File.OpenRead(replayPath);
-        var raw = await parser.ParseRawAsync(stream);
+        var raw = await Sc2ReplayParser.ParseRawAsync(stream);
 
         Assert.Contains("replay.header", raw.Files.Keys);
         Assert.Contains("replay.details", raw.Files.Keys);

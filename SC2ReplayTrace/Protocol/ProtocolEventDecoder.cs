@@ -2,7 +2,17 @@ using System.Text.Json.Nodes;
 
 namespace Biz.Bizadm.SC2ReplayTrace.Protocol;
 
+/// <summary>디코드된 프로토콜 이벤트입니다.</summary>
+/// <param name="GameLoop">게임 루프입니다.</param>
+/// <param name="UserId">사용자 식별자입니다.</param>
+/// <param name="EventName">이벤트 이름입니다.</param>
+/// <param name="Data">이벤트 데이터입니다.</param>
 public sealed record ProtocolEvent(int GameLoop, int? UserId, string EventName, JsonNode? Data);
+/// <summary>강한 타입으로 디코드된 프로토콜 이벤트입니다.</summary>
+/// <param name="GameLoop">게임 루프입니다.</param>
+/// <param name="UserId">사용자 식별자입니다.</param>
+/// <param name="EventName">이벤트 이름입니다.</param>
+/// <param name="Data">강한 타입 이벤트 데이터입니다.</param>
 public sealed record TypedProtocolEvent(int GameLoop, int? UserId, string EventName, Generated.IGeneratedTrackerEvent Data);
 
 /// <summary>공식 tracker/game/message 이벤트 스트림의 공통 프리픽스를 해석합니다.</summary>
@@ -23,6 +33,7 @@ public sealed class ProtocolEventDecoder
             [9] = "NNet.Replay.Tracker.SPlayerSetupEvent"
         };
 
+    /// <summary>tracker 이벤트 스트림을 디코드합니다.</summary>
     public IEnumerable<ProtocolEvent> DecodeTracker(
         ProtocolSchema schema,
         ReadOnlyMemory<byte> contents)
@@ -41,6 +52,7 @@ public sealed class ProtocolEventDecoder
         }
     }
 
+    /// <summary>tracker 이벤트 스트림을 강한 타입으로 디코드합니다.</summary>
     public IEnumerable<TypedProtocolEvent> DecodeTrackerTyped(
         ProtocolSchema schema,
         ReadOnlyMemory<byte> contents)
@@ -54,12 +66,14 @@ public sealed class ProtocolEventDecoder
         }
     }
 
+    /// <summary>게임 이벤트 스트림을 디코드합니다.</summary>
     public IEnumerable<ProtocolEvent> DecodeGame(
         ProtocolSchema schema,
         ReadOnlyMemory<byte> contents) =>
         DecodeMapped(schema, contents, Generated.GeneratedProtocolMaps.GameEventTypes,
             "NNet.Game.EEventId", isVersioned: false, decodeUserId: true);
 
+    /// <summary>메시지 이벤트 스트림을 디코드합니다.</summary>
     public IEnumerable<ProtocolEvent> DecodeMessage(
         ProtocolSchema schema,
         ReadOnlyMemory<byte> contents) =>
