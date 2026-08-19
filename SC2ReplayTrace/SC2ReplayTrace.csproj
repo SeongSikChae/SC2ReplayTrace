@@ -1,0 +1,67 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<AssemblyName>Biz.Bizadm.$(MSBuildProjectName)</AssemblyName>
+		<RootNamespace>Biz.Bizadm.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<Deterministic>true</Deterministic>
+		<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<Version>1.0.0</Version>
+		<Authors>SeongSikChae</Authors>
+		<RepositoryUrl>https://github.com/SeongSikChae/SC2ReplayTrace.git</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<Description>스타크래프트 2 리플레에서 게임 상태 및 이벤트 추척</Description>
+		<PackageId>$(AssemblyName)</PackageId>
+		<PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+		<PackageTags>StarCraft II;SC2;replay;parser;MPQ;s2protocol</PackageTags>
+		<PackageLicenseFile>LICENSE</PackageLicenseFile>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<S2ProtocolCommit>fbb98e80aee825d6deeabd7b48b51cbecebde062</S2ProtocolCommit>
+		<S2ProtocolSchemaDirectory>$(MSBuildProjectDirectory)\obj\$(Configuration)\$(TargetFramework)\s2protocol-schemas</S2ProtocolSchemaDirectory>
+		<GeneratedProtocolFile>$(MSBuildProjectDirectory)\obj\$(Configuration)\$(TargetFramework)\GeneratedProtocolTypes.g.cs</GeneratedProtocolFile>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="..\LICENSE">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+		<None Include="..\THIRD-PARTY-NOTICES.md">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+		<None Include="..\README.md">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="Protocol\S2Protocol.LICENSE" Pack="True" PackagePath="protocol" />
+	</ItemGroup>
+
+	<!-- These tools run only while building this source project. Their output is
+	     compiled into the assembly; consumers of the NuGet package never run them. -->
+	<Target Name="DownloadS2ProtocolSchemas" BeforeTargets="PrepareForBuild">
+		<Exec WorkingDirectory="$(MSBuildProjectDirectory)" Command="dotnet run --project &quot;$(MSBuildThisFileDirectory)..\Tools\SchemaFetcher\SchemaFetcher.csproj&quot; --configuration $(Configuration) -- &quot;$(S2ProtocolCommit)&quot; &quot;$(S2ProtocolSchemaDirectory)&quot;" />
+		<ItemGroup>
+			<EmbeddedResource Include="$(S2ProtocolSchemaDirectory)\protocol*.json" />
+		</ItemGroup>
+	</Target>
+
+	<Target Name="GenerateS2ProtocolTypes" DependsOnTargets="DownloadS2ProtocolSchemas" BeforeTargets="CoreCompile">
+		<Exec WorkingDirectory="$(MSBuildProjectDirectory)" Command="dotnet run --project &quot;$(MSBuildThisFileDirectory)..\Tools\SchemaGenerator\SchemaGenerator.csproj&quot; --configuration $(Configuration) -- &quot;$(S2ProtocolSchemaDirectory)&quot; &quot;$(GeneratedProtocolFile)&quot;" />
+		<ItemGroup>
+			<Compile Include="$(GeneratedProtocolFile)" />
+		</ItemGroup>
+	</Target>
+
+</Project>

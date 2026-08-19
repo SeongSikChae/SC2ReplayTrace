@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="SC2ReplayTrace\SC2ReplayTrace.csproj" />
+  <Project Path="Tests\Tests.csproj" />
+</Solution>
