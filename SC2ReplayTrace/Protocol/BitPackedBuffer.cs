@@ -15,6 +15,12 @@ public sealed class BitPackedBuffer
     /// <summary>현재까지 사용한 비트 수입니다.</summary>
     public int UsedBits => _offset * 8 - _nextBits;
 
+    /// <summary>현재 읽기 위치의 비트 오프셋입니다.</summary>
+    public int BitPosition => UsedBits;
+
+    /// <summary>아직 읽지 않은 비트 수입니다.</summary>
+    public int RemainingBits => checked(_data.Length * 8 - UsedBits);
+
     /// <summary>읽을 데이터가 모두 소비되었는지 나타냅니다.</summary>
     public bool Done => _nextBits == 0 && _offset >= _data.Length;
 
@@ -26,8 +32,8 @@ public sealed class BitPackedBuffer
     /// <returns>읽은 값입니다.</returns>
     public int ReadBits(int count)
     {
-        if (count is < 0 or > 31) throw new ArgumentOutOfRangeException(nameof(count));
-        var result = 0;
+        if (count is < 0 or > 32) throw new ArgumentOutOfRangeException(nameof(count));
+        uint result = 0;
         var read = 0;
         while (read < count)
         {
@@ -39,13 +45,14 @@ public sealed class BitPackedBuffer
             }
 
             var take = Math.Min(count - read, _nextBits);
-            result |= (_next & ((1 << take) - 1)) << (count - read - take);
+            var mask = take == 32 ? uint.MaxValue : (uint)((1 << take) - 1);
+            result |= (uint)(_next & mask) << (count - read - take);
             _next >>= take;
             _nextBits -= take;
             read += take;
         }
 
-        return result;
+        return unchecked((int)result);
     }
 
     /// <summary>바이트 경계에서 지정한 바이트 수를 읽습니다.</summary>

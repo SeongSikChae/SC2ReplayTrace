@@ -18,6 +18,8 @@ public sealed record TypedProtocolEvent(int GameLoop, int? UserId, string EventN
 /// <summary>공식 tracker/game/message 이벤트 스트림의 공통 프리픽스를 해석합니다.</summary>
 public sealed class ProtocolEventDecoder
 {
+    private readonly ProtocolEventDecoderOptions _options;
+
     private static readonly IReadOnlyDictionary<int, string> TrackerEvents =
         new Dictionary<int, string>
         {
@@ -32,6 +34,18 @@ public sealed class ProtocolEventDecoder
             [8] = "NNet.Replay.Tracker.SUnitPositionsEvent",
             [9] = "NNet.Replay.Tracker.SPlayerSetupEvent"
         };
+
+    /// <summary>기본 옵션으로 이벤트 스트림 디코더를 만듭니다.</summary>
+    public ProtocolEventDecoder() : this(new ProtocolEventDecoderOptions()) { }
+
+    /// <summary>지정한 옵션으로 이벤트 스트림 디코더를 만듭니다.</summary>
+    /// <param name="options">디코더 동작 옵션입니다.</param>
+    public ProtocolEventDecoder(ProtocolEventDecoderOptions options)
+    {
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        if (_options.MessageTrailingToleranceBits < 0)
+            throw new ArgumentOutOfRangeException(nameof(options), "MessageTrailingToleranceBits는 0 이상이어야 합니다.");
+    }
 
     /// <summary>tracker 이벤트 스트림을 디코드합니다.</summary>
     public IEnumerable<ProtocolEvent> DecodeTracker(
@@ -78,7 +92,8 @@ public sealed class ProtocolEventDecoder
         ProtocolSchema schema,
         ReadOnlyMemory<byte> contents) =>
         DecodeMapped(schema, contents, Generated.GeneratedProtocolMaps.MessageEventTypes,
-            "NNet.Game.EMessageId", isVersioned: false, decodeUserId: true);
+            "NNet.Game.EMessageId", isVersioned: false, decodeUserId: true,
+            trailingToleranceBits: _options.MessageTrailingToleranceBits);
 
     private static IEnumerable<ProtocolEvent> DecodeMapped(
         ProtocolSchema schema,
@@ -86,20 +101,51 @@ public sealed class ProtocolEventDecoder
         IReadOnlyDictionary<int, (int TypeId, string Name)> map,
         string eventIdType,
         bool isVersioned,
-        bool decodeUserId)
+        bool decodeUserId,
+        int trailingToleranceBits = 0)
     {
         var decoder = new SchemaValueDecoder(schema, contents, isVersioned);
         var loop = 0;
         while (!decoder.IsDone)
         {
-            loop += FindNumber(decoder.DecodeNext("NNet.SVarUint32")) ?? 0;
-            var userId = decodeUserId ? FindNumber(decoder.DecodeNext("NNet.Replay.SGameUserId")) : null;
-            var eventId = FindNumber(decoder.DecodeNext(eventIdType))
-                ?? throw new InvalidDataException("이벤트 ID를 읽을 수 없습니다.");
-            if (!map.TryGetValue(eventId, out var eventInfo))
-                throw new InvalidDataException($"알 수 없는 이벤트 ID: {eventId}");
-            yield return new ProtocolEvent(loop, userId, eventInfo.Name, decoder.DecodeNext(eventInfo.Name));
+            ProtocolEvent? decoded = null;
+            try
+            {
+                loop += FindNumber(decoder.DecodeNext("NNet.SVarUint32")) ?? 0;
+                var userId = decodeUserId ? FindNumber(decoder.DecodeNext("NNet.Replay.SGameUserId")) : null;
+                var eventId = FindNumber(decoder.DecodeNext(eventIdType))
+                    ?? throw new InvalidDataException("이벤트 ID를 읽을 수 없습니다.");
+                if (!map.TryGetValue(eventId, out var eventInfo))
+                    throw new InvalidDataException($"알 수 없는 이벤트 ID: {eventId}");
+                var payload = decoder.DecodeNext(eventInfo.Name);
+                decoder.ByteAlign();
+                decoded = new ProtocolEvent(loop, userId, eventInfo.Name, payload);
+            }
+            catch (InvalidDataException) when (!isVersioned && IsTrailingZeroPadding(contents.Span, decoder.BitPosition))
+            {
+                yield break;
+            }
+            catch (InvalidDataException) when (!isVersioned && trailingToleranceBits > 0 &&
+                                               decoder.BitPosition >= contents.Length * 8 - trailingToleranceBits)
+            {
+                // Some message streams include non-event trailing bytes near EOF.
+                yield break;
+            }
+            if (decoded is not null)
+                yield return decoded;
         }
+    }
+
+    private static bool IsTrailingZeroPadding(ReadOnlySpan<byte> contents, int bitPosition)
+    {
+        if (bitPosition < 0) return false;
+        var byteIndex = bitPosition / 8;
+        var bitOffset = bitPosition % 8;
+        if (byteIndex >= contents.Length) return true;
+        if (((contents[byteIndex] >> bitOffset) & 0xFF) != 0) return false;
+        for (var i = byteIndex + 1; i < contents.Length; i++)
+            if (contents[i] != 0) return false;
+        return true;
     }
 
     private static int? FindNumber(JsonNode? node)
@@ -111,4 +157,18 @@ public sealed class ProtocolEventDecoder
             return arrayNode.Select(FindNumber).FirstOrDefault(item => item.HasValue);
         return null;
     }
+
+}
+
+/// <summary><see cref="ProtocolEventDecoder"/> 동작 옵션입니다.</summary>
+public sealed record ProtocolEventDecoderOptions
+{
+    /// <summary>메시지 trailing 허용 기본값(비트)입니다.</summary>
+    public const int DefaultMessageTrailingToleranceBits = 32;
+
+    /// <summary>
+    /// 메시지 스트림 EOF 근처에서 디코드 실패를 trailing 노이즈로 간주할 허용 비트 수입니다.
+    /// 기본값은 32비트(4바이트)입니다.
+    /// </summary>
+    public int MessageTrailingToleranceBits { get; init; } = DefaultMessageTrailingToleranceBits;
 }

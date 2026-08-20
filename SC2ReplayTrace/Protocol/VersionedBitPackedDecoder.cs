@@ -14,23 +14,52 @@ public sealed class VersionedBitPackedDecoder
     public bool Done => _buffer.Done;
     /// <summary>현재까지 사용한 비트 수입니다.</summary>
     public int UsedBits => _buffer.UsedBits;
+    /// <summary>현재 읽기 위치의 비트 오프셋입니다.</summary>
+    public int BitPosition => _buffer.BitPosition;
+
+    /// <summary>다음 바이트 경계로 정렬합니다.</summary>
+    public void Align() => _buffer.Align();
 
     /// <summary>가변 길이 정수를 읽습니다.</summary>
     public int ReadVInt()
     {
-        var first = _buffer.ReadBits(8);
-        var negative = (first & 1) != 0;
-        var result = (long)((first >> 1) & 0x3F);
-        var bits = 6;
-        while ((first & 0x80) != 0)
+        long result = 0;
+        var bits = 0;
+        while (true)
         {
-            first = _buffer.ReadBits(8);
-            result |= (long)(first & 0x7F) << bits;
+            var part = _buffer.ReadBits(8);
+            result |= (long)(part & 0x7F) << bits;
             bits += 7;
-            if (bits > 63) throw new InvalidDataException("vint가 너무 큽니다.");
+            if ((part & 0x80) == 0) break;
+            if (bits >= 64) throw new InvalidDataException("vint가 너무 큽니다.");
         }
-        return checked((int)(negative ? -result : result));
+        result = (result & 1) != 0 ? -(result >> 1) : (result >> 1);
+        return unchecked((int)result);
     }
+
+    /// <summary>versioned int 인스턴스를 읽습니다(marker 9).</summary>
+    public int ReadInt() { Expect(9); return ReadVInt(); }
+
+    /// <summary>versioned array 길이를 읽습니다(marker 0).</summary>
+    public int ReadArrayLength() { Expect(0); return ReadVInt(); }
+
+    /// <summary>versioned struct 필드 수를 읽습니다(marker 5).</summary>
+    public int ReadStructFieldCount() { Expect(5); return ReadVInt(); }
+
+    /// <summary>versioned struct 필드 태그를 읽습니다.</summary>
+    public int ReadStructFieldTag() => ReadVInt();
+
+    /// <summary>versioned choice 태그를 읽습니다(marker 3).</summary>
+    public int ReadChoiceTag() { Expect(3); return ReadVInt(); }
+
+    /// <summary>versioned optional 존재 플래그를 읽습니다(marker 4).</summary>
+    public bool ReadOptionalExists() { Expect(4); return _buffer.ReadBits(8) != 0; }
+
+    /// <summary>versioned u32 인스턴스를 읽습니다(marker 7).</summary>
+    public uint ReadUInt32() { Expect(7); return BitConverter.ToUInt32(_buffer.ReadAlignedBytes(4)); }
+
+    /// <summary>versioned u64 인스턴스를 읽습니다(marker 8).</summary>
+    public ulong ReadUInt64() { Expect(8); return BitConverter.ToUInt64(_buffer.ReadAlignedBytes(8)); }
 
     /// <summary>길이 접두사가 있는 바이트 배열을 읽습니다.</summary>
     public byte[] ReadBlob()
@@ -86,7 +115,8 @@ public sealed class VersionedBitPackedDecoder
 
     private void Expect(int marker)
     {
-        if (_buffer.ReadBits(8) != marker)
-            throw new InvalidDataException("s2protocol 버전 스트림 marker가 일치하지 않습니다.");
+        var actual = _buffer.ReadBits(8);
+        if (actual != marker)
+            throw new InvalidDataException($"s2protocol 버전 스트림 marker가 일치하지 않습니다. expected={marker} actual={actual} bitPos={_buffer.BitPosition}");
     }
 }

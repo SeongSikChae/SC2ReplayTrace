@@ -1,0 +1,110 @@
+{
+  "baseBuild": 97563,
+  "officialFirst10": [
+    {
+      "gameLoop": 0,
+      "userId": 0,
+      "eventName": "NNet.Game.STriggerSoundLengthSyncEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 0,
+      "eventName": "NNet.Game.STriggerSoundLengthSyncEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 0,
+      "eventName": "NNet.Game.SUserOptionsEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 16,
+      "eventName": "NNet.Game.SSetSyncLoadingTimeEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 16,
+      "eventName": "NNet.Game.SUserFinishedLoadingSyncEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 16,
+      "eventName": "NNet.Game.SSetSyncPlayingTimeEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 0,
+      "eventName": "NNet.Game.SSelectionDeltaEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 0,
+      "eventName": "NNet.Game.SCmdEvent"
+    },
+    {
+      "gameLoop": 1,
+      "userId": 0,
+      "eventName": "NNet.Game.SCameraUpdateEvent"
+    },
+    {
+      "gameLoop": 272,
+      "userId": 0,
+      "eventName": "NNet.Game.SCommandManagerStateEvent"
+    }
+  ],
+  "fixtureFirst10": [
+    {
+      "gameLoop": 0,
+      "userId": 0,
+      "eventName": "NNet.Game.STriggerSoundLengthSyncEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 0,
+      "eventName": "NNet.Game.STriggerSoundLengthSyncEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 0,
+      "eventName": "NNet.Game.SUserOptionsEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 16,
+      "eventName": "NNet.Game.SSetSyncLoadingTimeEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 16,
+      "eventName": "NNet.Game.SUserFinishedLoadingSyncEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 16,
+      "eventName": "NNet.Game.SSetSyncPlayingTimeEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 0,
+      "eventName": "NNet.Game.SSelectionDeltaEvent"
+    },
+    {
+      "gameLoop": 0,
+      "userId": 0,
+      "eventName": "NNet.Game.SCmdEvent"
+    },
+    {
+      "gameLoop": 1,
+      "userId": 0,
+      "eventName": "NNet.Game.SCameraUpdateEvent"
+    },
+    {
+      "gameLoop": 272,
+      "userId": 0,
+      "eventName": "NNet.Game.SCommandManagerStateEvent"
+    }
+  ],
+  "match": true,
+  "officialGameEventCount": 4337,
+  "fixtureGameEventCount": 4337
+}

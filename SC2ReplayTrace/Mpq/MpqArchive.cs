@@ -13,6 +13,7 @@ public sealed class MpqArchive : IDisposable
     private const uint Compressed = 0x00000200;
     private const uint Imploded = 0x00000100;
     private const uint SectorCrc = 0x04000000;
+    private const uint Encrypted = 0x00010000;
     private readonly Stream _stream;
     private readonly MpqHash[] _hashes;
     private readonly MpqBlock[] _blocks;
@@ -72,19 +73,25 @@ public sealed class MpqArchive : IDisposable
         var block = _blocks[hash.BlockIndex];
         if ((block.Flags & Exists) == 0) throw new InvalidDataException("MPQ 블록이 존재하지 않습니다.");
         if (block.CompressedSize == 0) return [];
+        if ((block.Flags & Encrypted) != 0)
+            throw new NotSupportedException($"MPQ 암호화 블록은 아직 지원되지 않습니다: {name}");
         _stream.Position = _archiveOffset + block.Offset;
         var data = new byte[block.CompressedSize];
         ReadExactly(data);
-        if ((block.Flags & SingleUnit) != 0) return Decompress(data, block.Flags, (int)block.Size);
+        if ((block.Flags & SingleUnit) != 0)
+        {
+            var shouldDecompress = (block.Flags & Compressed) != 0 && block.Size > block.CompressedSize;
+            return shouldDecompress ? Decompress(data, block.Flags, (int)block.Size) : data;
+        }
 
-        var sectorCount = (int)(block.Size / _sectorSize) + 2 + ((block.Flags & SectorCrc) != 0 ? 1 : 0);
-        var offsets = new uint[sectorCount];
+        var dataSectorCount = checked((int)((block.Size + _sectorSize - 1) / _sectorSize));
+        var tableEntryCount = dataSectorCount + 1 + ((block.Flags & SectorCrc) != 0 ? 1 : 0);
+        var offsets = new uint[tableEntryCount];
         if (offsets.Length * 4 > data.Length)
             throw new InvalidDataException($"MPQ 섹터 오프셋 테이블이 잘렸습니다: {name}, 필요={offsets.Length * 4}, 실제={data.Length}");
         for (var i = 0; i < offsets.Length; i++)
             offsets[i] = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(i * 4));
         using var output = new MemoryStream((int)block.Size);
-        var dataSectorCount = offsets.Length - 1 - ((block.Flags & SectorCrc) != 0 ? 1 : 0);
         for (var i = 0; i < dataSectorCount; i++)
         {
             var start = (int)offsets[i];
@@ -92,9 +99,57 @@ public sealed class MpqArchive : IDisposable
             if (length <= 0) continue;
             if (start < 0 || length > data.Length - start)
                 throw new InvalidDataException($"MPQ 섹터 범위가 올바르지 않습니다: {name}, 시작={start}, 길이={length}, 실제={data.Length}");
-            output.Write(Decompress(data.AsSpan(start, length).ToArray(), block.Flags, (int)_sectorSize));
+            var sector = data.AsSpan(start, length).ToArray();
+            var shouldDecompress = (block.Flags & Compressed) != 0 && ((int)block.Size - (int)output.Length) > sector.Length;
+            if (shouldDecompress)
+                sector = Decompress(sector, block.Flags, (int)_sectorSize);
+            var remaining = (int)block.Size - (int)output.Length;
+            if (remaining <= 0) break;
+            if (sector.Length > remaining)
+                output.Write(sector, 0, remaining);
+            else
+                output.Write(sector);
         }
-        return output.ToArray();
+        return output.Length == block.Size ? output.ToArray() : output.ToArray().AsSpan(0, (int)Math.Min(output.Length, block.Size)).ToArray();
+    }
+
+    /// <summary>디버깅용으로 내부 파일의 MPQ 블록 플래그를 조회합니다.</summary>
+    public uint GetBlockFlags(string name)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var hash = FindHash(name);
+        if (hash.BlockIndex == uint.MaxValue) throw new FileNotFoundException("MPQ 내부 파일을 찾을 수 없습니다.", name);
+        return _blocks[hash.BlockIndex].Flags;
+    }
+
+    /// <summary>디버깅용으로 섹터별 압축 타입 바이트를 조회합니다.</summary>
+    public byte[] GetSectorCompressionTypes(string name, int maxSectors = 8)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var hash = FindHash(name);
+        if (hash.BlockIndex == uint.MaxValue) throw new FileNotFoundException("MPQ 내부 파일을 찾을 수 없습니다.", name);
+        var block = _blocks[hash.BlockIndex];
+        _stream.Position = _archiveOffset + block.Offset;
+        var data = new byte[block.CompressedSize];
+        ReadExactly(data);
+        if ((block.Flags & SingleUnit) != 0)
+            return data.Length == 0 ? [] : [data[0]];
+
+        var dataSectorCount = checked((int)((block.Size + _sectorSize - 1) / _sectorSize));
+        var tableEntryCount = dataSectorCount + 1 + ((block.Flags & SectorCrc) != 0 ? 1 : 0);
+        var offsets = new uint[tableEntryCount];
+        for (var i = 0; i < offsets.Length; i++)
+            offsets[i] = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(i * 4));
+
+        var result = new List<byte>(Math.Min(dataSectorCount, maxSectors));
+        for (var i = 0; i < dataSectorCount && i < maxSectors; i++)
+        {
+            var start = (int)offsets[i];
+            var length = (int)offsets[i + 1] - start;
+            if (length > 0 && start >= 0 && start < data.Length)
+                result.Add(data[start]);
+        }
+        return result.ToArray();
     }
 
     /// <summary>아카이브를 폐기합니다.</summary>
@@ -121,7 +176,7 @@ public sealed class MpqArchive : IDisposable
         if ((flags & Imploded) != 0) throw new NotSupportedException("MPQ implode 압축은 지원하지 않습니다.");
         if (data.Length == 0) return [];
         var compressionType = data[0];
-        if (compressionType == 0) return data[1..];
+        if (compressionType == 0) return data;
         if ((compressionType & 0x10) != 0)
             return BZip2Decoder.Decode(data[1..]);
         if (compressionType != 2)

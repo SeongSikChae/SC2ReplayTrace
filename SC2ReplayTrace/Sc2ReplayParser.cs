@@ -72,19 +72,8 @@ internal static class TraceNormalizer
         var messageEvents = DecodeEvents(schema, raw.Streams, "replay.message.events", eventDecoder.DecodeMessage);
         if (raw.Streams.TryGetValue("replay.tracker.events", out var tracker))
         {
-            try
-            {
-                foreach (var item in new ProtocolEventDecoder().DecodeTracker(schema, tracker))
-                    AddEvent(events, item, positionState);
-            }
-            catch (Exception exception) when (
-                tracker.Length == 0 ||
-                exception is InvalidDataException or
-                InvalidOperationException or
-                ArgumentOutOfRangeException or
-                EndOfStreamException)
-            {
-            }
+            foreach (var item in new ProtocolEventDecoder().DecodeTracker(schema, tracker))
+                AddEvent(events, item, positionState);
         }
 
         events.Sort(static (left, right) => left.GameLoop.CompareTo(right.GameLoop));
@@ -110,19 +99,9 @@ internal static class TraceNormalizer
         Func<ProtocolSchema, ReadOnlyMemory<byte>, IEnumerable<ProtocolEvent>> decoder)
     {
         if (!streams.TryGetValue(streamName, out var bytes)) return [];
-        try
-        {
-            return decoder(schema, bytes)
-                .Select(item => new RawReplayEvent(item.GameLoop, item.UserId, item.EventName, item.Data))
-                .ToArray();
-        }
-        catch (Exception exception) when (
-            exception is InvalidDataException or
-            ArgumentOutOfRangeException or
-            EndOfStreamException)
-        {
-            return [];
-        }
+        return decoder(schema, bytes)
+            .Select(item => new RawReplayEvent(item.GameLoop, item.UserId, item.EventName, item.Data))
+            .ToArray();
     }
 
     private static JsonNode? DecodeFirst(
@@ -278,8 +257,8 @@ internal static class TraceNormalizer
         for (var offset = 0; offset + 2 < items.Count; offset += 3)
         {
             unitIndex += items[offset]?.GetValue<int>() ?? 0;
-            var x = (items[offset + 1]?.GetValue<float>() ?? 0) * 4;
-            var y = (items[offset + 2]?.GetValue<float>() ?? 0) * 4;
+            var x = ReadNumeric(items[offset + 1]) * 4;
+            var y = ReadNumeric(items[offset + 2]) * 4;
             var tag = ((ulong)unitIndex << 18) | (uint)(state.Recycles.TryGetValue(unitIndex, out var recycle) ? recycle : 0);
             var position = new UnitPosition(x, y);
             target.Add(new TraceEvent(TraceEventKind.UnitPosition, loop, time, UnitTag: tag, Position: position));
@@ -293,6 +272,16 @@ internal static class TraceNormalizer
     {
         public Dictionary<int, int> Recycles { get; } = [];
         public Dictionary<ulong, UnitPosition> LastPositions { get; } = [];
+    }
+
+    private static float ReadNumeric(JsonNode? node)
+    {
+        if (node is not JsonValue value) return 0;
+        if (value.TryGetValue<float>(out var asFloat)) return asFloat;
+        if (value.TryGetValue<double>(out var asDouble)) return (float)asDouble;
+        if (value.TryGetValue<int>(out var asInt)) return asInt;
+        if (value.TryGetValue<long>(out var asLong)) return asLong;
+        return 0;
     }
 }
 

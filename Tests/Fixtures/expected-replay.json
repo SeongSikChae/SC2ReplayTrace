@@ -1,0 +1,25 @@
+{
+  "gameVersion": "5.0.16.97563",
+  "baseBuild": 97563,
+  "mapName": "아크로폴리스 - 래더",
+  "mapFileName": "AcropolisLE.SC2Map",
+  "totalGameLoops": 22754,
+  "durationSeconds": 1422,
+  "eventSnapshot": "event-expected.json",
+  "players": [
+    {
+      "playerId": 1,
+      "name": "Sc2JudgmentBot",
+      "race": "Terran",
+      "result": "Win",
+      "teamId": 0
+    },
+    {
+      "playerId": 2,
+      "name": "인공지능 칸 (중간)",
+      "race": "Protoss",
+      "result": "Loss",
+      "teamId": 1
+    }
+  ]
+}

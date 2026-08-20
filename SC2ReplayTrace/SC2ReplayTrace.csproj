@@ -14,7 +14,7 @@
 		<EmbedUntrackedSources>true</EmbedUntrackedSources>
 		<IncludeSymbols>true</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
-		<Version>1.0.0</Version>
+		<Version>1.0.1</Version>
 		<Authors>SeongSikChae</Authors>
 		<RepositoryUrl>https://github.com/SeongSikChae/SC2ReplayTrace.git</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
@@ -46,6 +46,11 @@
 
 	<ItemGroup>
 		<None Include="Protocol\S2Protocol.LICENSE" Pack="True" PackagePath="protocol" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="SharpCompress" Version="0.50.4" />
+	  <PackageReference Include="SharpZipLib" Version="1.4.2" />
 	</ItemGroup>
 
 	<!-- These tools run only while building this source project. Their output is
