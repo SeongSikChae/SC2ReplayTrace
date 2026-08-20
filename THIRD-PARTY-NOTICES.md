@@ -16,6 +16,7 @@ https://github.com/Blizzard/s2protocol
 - `SC2ReplayTrace/Protocol/VersionedBitPackedDecoder.cs`
 - `SC2ReplayTrace/Protocol/SchemaValueDecoder.cs`
 - `SC2ReplayTrace/Protocol/ProtocolEventDecoder.cs`
+- `SC2ReplayTrace/Protocol/Generated/GeneratedProtocolTypes.g.cs`
 
 Blizzard Entertainment의 MIT 라이선스 전문은
 `SC2ReplayTrace/Protocol/S2Protocol.LICENSE`에서 확인할 수 있습니다.

@@ -1,66 +1,79 @@
 # SC2ReplayTrace
 
-Blizzard `s2protocol`의 공식 JSON 스키마를 빌드 시 고정 커밋에서 내려받아
-사용하는 순수 .NET SC2Replay 파서입니다. 비상업적 프로젝트이며, Blizzard Entertainment와 제휴하거나
-공식적으로 보증받지 않습니다.
+Blizzard `s2protocol` 기반의 순수 .NET SC2Replay 파서입니다.
+리플레이 MPQ에서 공식 `replay.*` 스트림을 읽고, 정규화된 `ReplayTrace` 모델과
+원시 이벤트 데이터를 함께 제공합니다.
 
-## 현재 API
+이 프로젝트는 비상업적 프로젝트이며 Blizzard Entertainment와 제휴하거나
+공식적으로 보증받지 않습니다.
 
 ## NuGet 패키지 사용
 
-배포된 NuGet 패키지는 스키마와 생성된 강한 타입을 라이브러리 어셈블리에 포함하므로,
-패키지를 설치한 소비자 프로젝트에는 `Tools`, Python, 스키마 다운로드 단계가 필요하지 않습니다.
-
 ```xml
-<PackageReference Include="Biz.Bizadm.SC2ReplayTrace" Version="1.0.0" />
+<PackageReference Include="Biz.Bizadm.SC2ReplayTrace" Version="1.0.1" />
 ```
 
+패키지에는 `protocol*.json` 스키마 리소스가 포함되어 있으므로, 소비자 프로젝트에서
+`Tools`, Python, 스키마 다운로드 단계를 별도로 실행할 필요가 없습니다.
+
+## 빠른 시작
+
 ```csharp
-var parser = new Sc2ReplayParser();
-var trace = await parser.ParseAsync("game.SC2Replay");
+using Biz.Bizadm.SC2ReplayTrace;
+using Biz.Bizadm.SC2ReplayTrace.Models;
+
+ReplayTrace trace = await Sc2ReplayParser.ParseAsync("game.SC2Replay");
+
+Console.WriteLine($"Map: {trace.Map.Name}");
+Console.WriteLine($"BaseBuild: {trace.BaseBuild}");
+Console.WriteLine($"Players: {trace.Players.Count}");
+Console.WriteLine($"Events: {trace.Events.Count}");
+
+var moves = trace.EventsOfKind(TraceEventKind.UnitMoved);
 ```
 
-`Tools\SchemaFetcher`와 `Tools\SchemaGenerator`는 저장소에서 패키지를 빌드할 때만
-사용되는 개발용 도구입니다. 패키지 설치 후 소비자 프로젝트의 빌드에는 실행되지 않습니다.
+## 원시 스트림 + 스키마 디코딩
 
 ```csharp
-var parser = new Sc2ReplayParser();
-await using var stream = File.OpenRead("game.SC2Replay");
+using Biz.Bizadm.SC2ReplayTrace;
+using Biz.Bizadm.SC2ReplayTrace.Protocol;
 
-// MPQ 내부의 공식 replay.* 스트림 추출
-ReplayStreams files = await parser.ParseRawAsync(stream);
+await using var replayStream = File.OpenRead("game.SC2Replay");
+ReplayStreams raw = await Sc2ReplayParser.ParseRawAsync(replayStream);
 
-// 공식 프로토콜 버전 선택 및 스키마 기반 값 디코딩
-var schema = ProtocolSchemas.Load(97563);
+using var schema = ProtocolSchemas.Load(97563);
 var header = new SchemaValueDecoder(
     schema,
-    files.Files["replay.header"],
+    raw.Files["replay.header"],
     isVersioned: true).Decode("NNet.Replay.SHeader");
 ```
 
-`ParseAsync`는 정형 `ReplayTrace` API를 제공하며, `ParseRawAsync`는 공식 스트림을
-손실 없이 후속 디코더에서 사용할 수 있도록 반환합니다. 공식 스키마는 base build
-이하에서 가장 가까운 버전을 자동 선택합니다.
+`ProtocolSchemas.Load(baseBuild)`는 요청한 빌드 이하에서 가장 가까운 내장 스키마를
+자동 선택합니다.
 
-빌드 시 Blizzard `s2protocol`의 커밋
-`fbb98e80aee825d6deeabd7b48b51cbecebde062`에서 스키마를 다운로드합니다.
-`SchemaGenerator`가 tracker 이벤트의 강한 타입 C# DTO를 생성하며, 생성 파일과
-다운로드 파일은 `obj` 아래에만 생성되어 저장소에는 포함하지 않습니다.
+## 현재 API
 
-`ParseAsync`는 먼저 `replay.header`에서 실제 `m_baseBuild`를 읽은 뒤 해당 빌드에
-맞는 스키마를 선택합니다. details/initdata와 game/message 이벤트는 원시 JSON 및
-이벤트명·게임 루프·사용자 ID를 보존하며, tracker 위치 이벤트는 공식 delta unit
-index와 좌표 배율 4 규칙을 적용합니다.
+- `Sc2ReplayParser.ParseAsync(string|Stream)`:
+  리플레이를 읽어 정규화된 `ReplayTrace`를 반환합니다.
+- `Sc2ReplayParser.ParseRawAsync(Stream)`:
+  MPQ 내부의 `replay.*` 원시 스트림을 `ReplayStreams`로 반환합니다.
+- `ReplayTrace`:
+  맵/버전/플레이어/이벤트와 `RawData`(details, initData, game/message 이벤트 등)를 제공합니다.
+- `ReplayTrace.EventsOfKind(...)`, `ReplayTrace.EventsForUnit(...)`:
+  공통 조회 시나리오용 헬퍼입니다.
+
+## 스키마/생성 코드 관리
+
+- 저장소에는 `SC2ReplayTrace/Protocol/Schemas/protocol*.json`이 포함되어 있습니다.
+- tracker 이벤트용 생성 코드 `SC2ReplayTrace/Protocol/Generated/GeneratedProtocolTypes.g.cs`가 포함되어 있습니다.
+- `Tools/SchemaFetcher`, `Tools/SchemaGenerator`, `Tools/ReplayInspector`는 저장소 유지보수/검증을 위한 개발 도구입니다.
 
 ## 라이선스 및 제3자 고지
 
-SC2ReplayTrace 자체의 소스 코드는 루트의 `LICENSE`에 명시된 라이선스를
-따릅니다. Blizzard `s2protocol`에서 제공되거나 포팅된 프로토콜 스키마와
-디코딩 규칙에는 원본 MIT 라이선스가 적용됩니다.
+SC2ReplayTrace 자체 소스 코드는 루트의 `LICENSE`를 따릅니다.
+Blizzard `s2protocol`에서 제공되거나 포팅된 스키마/디코딩 규칙은 원본 MIT 라이선스가 적용됩니다.
 
-Blizzard 저작권 및 MIT 라이선스 전문은
-`SC2ReplayTrace/Protocol/S2Protocol.LICENSE`에 포함되어 있으며, 적용 범위와
-상표 비제휴 고지는 `THIRD-PARTY-NOTICES.md`에서 확인할 수 있습니다.
+- Blizzard MIT 라이선스 전문: `SC2ReplayTrace/Protocol/S2Protocol.LICENSE`
+- 적용 범위 및 상표 비제휴 고지: `THIRD-PARTY-NOTICES.md`
 
-StarCraft II 및 Blizzard Entertainment는 Blizzard Entertainment, Inc.의
-상표 또는 등록 상표입니다.
+StarCraft II 및 Blizzard Entertainment는 Blizzard Entertainment, Inc.의 상표 또는 등록 상표입니다.
