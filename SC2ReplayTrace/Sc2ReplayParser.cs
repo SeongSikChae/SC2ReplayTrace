@@ -70,10 +70,16 @@ internal static class TraceNormalizer
         var eventDecoder = new ProtocolEventDecoder();
         var gameEvents = DecodeEvents(schema, raw.Streams, "replay.game.events", eventDecoder.DecodeGame);
         var messageEvents = DecodeEvents(schema, raw.Streams, "replay.message.events", eventDecoder.DecodeMessage);
+        var startLocations = new Dictionary<int, UnitPosition>();
+        var raceHints = new Dictionary<int, Race>();
         if (raw.Streams.TryGetValue("replay.tracker.events", out var tracker))
         {
             foreach (var item in new ProtocolEventDecoder().DecodeTracker(schema, tracker))
+            {
+                TryCaptureStartLocation(startLocations, item);
+                TryCaptureRaceHint(raceHints, item);
                 AddEvent(events, item, positionState);
+            }
         }
 
         events.Sort(static (left, right) => left.GameLoop.CompareTo(right.GameLoop));
@@ -87,7 +93,7 @@ internal static class TraceNormalizer
             baseBuild,
             duration,
             loops,
-            ReadPlayers(details),
+            ReadPlayers(details, startLocations, raceHints),
             events.AsReadOnly(),
             new ReplayRawData(header, details, initData, gameEvents, messageEvents, attributes));
     }
@@ -125,16 +131,31 @@ internal static class TraceNormalizer
             ? JsonValue.Create(Convert.ToBase64String(streams["replay.attributes.events"]))
             : null;
 
-    private static ReplayPlayer[] ReadPlayers(JsonNode? details)
+    private static ReplayPlayer[] ReadPlayers(
+        JsonNode? details,
+        IReadOnlyDictionary<int, UnitPosition>? startLocations = null,
+        IReadOnlyDictionary<int, Race>? raceHints = null)
     {
         var players = FindArray(details, "m_playerList", "m_players", "players");
-        return players.Select((player, index) => new ReplayPlayer(
-            FindInt(player, "m_playerId", "m_id") ?? index + 1,
-            FindString(player, "m_name", "name") ?? $"Player {index + 1}",
-            ParseRace(FindString(player, "m_race", "m_assignedRace", "race")),
-            ParseResult(FindString(player, "m_result", "result")),
-            ReadColor(player),
-            FindInt(player, "m_teamId", "teamId"))).ToArray();
+        return players.Select((player, index) =>
+        {
+            var parsedId = FindInt(player, "m_playerId", "m_id");
+            var playerId = parsedId is > 0 ? parsedId.Value : index + 1;
+            var parsedRace = ParseRace(
+                FindString(player, "m_race", "m_assignedRace", "race"),
+                raceHints is not null && raceHints.TryGetValue(playerId, out var hintRace) ? hintRace : null);
+            var parsedResult = ParseResult(
+                FindString(player, "m_result", "result"),
+                FindInt(player, "m_result", "result"));
+            return new ReplayPlayer(
+                playerId,
+                FindString(player, "m_name", "name") ?? $"Player {index + 1}",
+                parsedRace,
+                parsedResult,
+                ReadColor(player),
+                FindInt(player, "m_teamId", "teamId"),
+                ReadStartLocation(startLocations, playerId));
+        }).ToArray();
     }
 
     private static PlayerColor? ReadColor(JsonNode? player)
@@ -191,21 +212,27 @@ internal static class TraceNormalizer
     private static string? FindString(JsonNode? node, params string[] names) =>
         FindNode(node, names) is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
-    private static Race ParseRace(string? value) => value?.ToLowerInvariant() switch
+    private static Race ParseRace(string? value, Race? fallback = null) => value?.ToLowerInvariant() switch
     {
-        "terran" => Race.Terran,
+        "terran" or "terr" => Race.Terran,
         "zerg" => Race.Zerg,
-        "protoss" => Race.Protoss,
-        "random" => Race.Random,
-        _ => Race.Unknown
+        "protoss" or "prot" => Race.Protoss,
+        "random" or "rand" => Race.Random,
+        _ => fallback ?? Race.Unknown
     };
 
-    private static MatchResult ParseResult(string? value) => value?.ToLowerInvariant() switch
+    private static MatchResult ParseResult(string? value, int? numericValue = null) => value?.ToLowerInvariant() switch
     {
         "win" or "won" => MatchResult.Win,
         "loss" or "lost" => MatchResult.Loss,
         "draw" => MatchResult.Draw,
-        _ => MatchResult.Unknown
+        _ => numericValue switch
+        {
+            1 => MatchResult.Win,
+            2 => MatchResult.Loss,
+            3 => MatchResult.Draw,
+            _ => MatchResult.Unknown
+        }
     };
 
     private static void AddEvent(List<TraceEvent> target, ProtocolEvent item, PositionState positionState)
@@ -231,6 +258,55 @@ internal static class TraceNormalizer
             AddPositionEvents(target, loop, time, node, positionState);
         else if (name.EndsWith("SUpgradeEvent", StringComparison.Ordinal))
             target.Add(new TraceEvent(Number(node, "m_count") <= 1 ? TraceEventKind.UpgradeStarted : TraceEventKind.UpgradeCompleted, loop, time, UpgradeType: Text(node, "m_upgradeTypeName")));
+    }
+
+    private static UnitPosition? ReadStartLocation(
+        IReadOnlyDictionary<int, UnitPosition>? startLocations,
+        int playerId) =>
+        startLocations is not null && startLocations.TryGetValue(playerId, out var location) ? location : null;
+
+    private static void TryCaptureStartLocation(
+        IDictionary<int, UnitPosition> startLocations,
+        ProtocolEvent item)
+    {
+        if (!item.EventName.EndsWith("SUnitBornEvent", StringComparison.Ordinal)) return;
+        if (item.Data is not JsonObject node) return;
+
+        var unitType = Text(node, "m_unitTypeName");
+        if (unitType is not ("CommandCenter" or "Nexus" or "Hatchery")) return;
+
+        var playerId = Number(node, "m_controlPlayerId");
+        if (!playerId.HasValue || playerId.Value <= 0) return;
+        if (startLocations.ContainsKey(playerId.Value)) return;
+
+        var position = Position(node);
+        if (position is null) return;
+        startLocations[playerId.Value] = position;
+    }
+
+    private static void TryCaptureRaceHint(
+        IDictionary<int, Race> raceHints,
+        ProtocolEvent item)
+    {
+        if (!item.EventName.EndsWith("SUnitBornEvent", StringComparison.Ordinal) &&
+            !item.EventName.EndsWith("SUnitInitEvent", StringComparison.Ordinal))
+            return;
+        if (item.Data is not JsonObject node) return;
+
+        var playerId = Number(node, "m_controlPlayerId");
+        if (!playerId.HasValue || playerId.Value <= 0) return;
+        if (raceHints.ContainsKey(playerId.Value)) return;
+
+        var unitType = Text(node, "m_unitTypeName");
+        var race = unitType switch
+        {
+            "CommandCenter" or "OrbitalCommand" or "PlanetaryFortress" or "SCV" => Race.Terran,
+            "Nexus" or "Probe" => Race.Protoss,
+            "Hatchery" or "Lair" or "Hive" or "Drone" or "Overlord" => Race.Zerg,
+            _ => Race.Unknown
+        };
+        if (race == Race.Unknown) return;
+        raceHints[playerId.Value] = race;
     }
 
     private static int? Number(JsonNode? node, string name) => node?[name]?.GetValue<int>();

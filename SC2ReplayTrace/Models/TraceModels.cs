@@ -69,13 +69,15 @@ public sealed record PlayerColor(byte Red, byte Green, byte Blue, byte Alpha = 2
 /// <param name="Result">경기 결과입니다.</param>
 /// <param name="Color">플레이어 색상입니다.</param>
 /// <param name="TeamId">팀 식별자입니다.</param>
+/// <param name="StartLocation">시작 위치 좌표입니다.</param>
 public sealed record ReplayPlayer(
     int PlayerId,
     string Name,
     Race Race,
     MatchResult Result,
     PlayerColor? Color,
-    int? TeamId = null);
+    int? TeamId = null,
+    UnitPosition? StartLocation = null);
 
 /// <summary>맵 정보입니다.</summary>
 /// <param name="Name">맵 이름입니다.</param>

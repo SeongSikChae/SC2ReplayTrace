@@ -1,6 +1,7 @@
 ﻿using Biz.Bizadm.SC2ReplayTrace.Protocol;
 using Biz.Bizadm.SC2ReplayTrace.Protocol.Generated;
 using Biz.Bizadm.SC2ReplayTrace;
+using Biz.Bizadm.SC2ReplayTrace.Models;
 using Biz.Bizadm.SC2ReplayTrace.Mpq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -124,6 +125,31 @@ public sealed class ProtocolTests
         Assert.True(raw.Files["replay.initData"].Length > 100);
         Assert.True(raw.Files["replay.game.events"].Length > 100);
         Assert.True(raw.Files["replay.message.events"].Length > 0);
+    }
+
+    [Fact]
+    public async Task SampleReplayParsesStartLocationForEachPlayer()
+    {
+        var replayPath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "replay.SC2Replay");
+        Assert.True(File.Exists(replayPath), $"Fixture not found: {replayPath}");
+
+        var trace = await Sc2ReplayParser.ParseAsync(replayPath);
+
+        Assert.NotEmpty(trace.Players);
+        Assert.All(trace.Players, player => Assert.NotNull(player.StartLocation));
+
+        var terran = Assert.Single(trace.Players, player => player.PlayerId == 1);
+        var protoss = Assert.Single(trace.Players, player => player.PlayerId == 2);
+
+        Assert.Equal(Race.Terran, terran.Race);
+        Assert.Equal(Race.Protoss, protoss.Race);
+        Assert.Equal(MatchResult.Win, terran.Result);
+        Assert.Equal(MatchResult.Loss, protoss.Result);
+
+        Assert.Equal(33f, terran.StartLocation!.X);
+        Assert.Equal(138f, terran.StartLocation!.Y);
+        Assert.Equal(142f, protoss.StartLocation!.X);
+        Assert.Equal(33f, protoss.StartLocation!.Y);
     }
 
     [Fact]

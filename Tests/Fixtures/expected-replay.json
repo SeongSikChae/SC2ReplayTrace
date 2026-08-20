@@ -12,14 +12,22 @@
       "name": "Sc2JudgmentBot",
       "race": "Terran",
       "result": "Win",
-      "teamId": 0
+      "teamId": 0,
+      "startLocation": {
+        "x": 33,
+        "y": 138
+      }
     },
     {
       "playerId": 2,
       "name": "인공지능 칸 (중간)",
       "race": "Protoss",
       "result": "Loss",
-      "teamId": 1
+      "teamId": 1,
+      "startLocation": {
+        "x": 142,
+        "y": 33
+      }
     }
   ]
 }

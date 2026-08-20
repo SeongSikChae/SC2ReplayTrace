@@ -10,7 +10,7 @@ Blizzard `s2protocol` 기반의 순수 .NET SC2Replay 파서입니다.
 ## NuGet 패키지 사용
 
 ```xml
-<PackageReference Include="Biz.Bizadm.SC2ReplayTrace" Version="1.0.1" />
+<PackageReference Include="Biz.Bizadm.SC2ReplayTrace" Version="1.0.2" />
 ```
 
 패키지에는 `protocol*.json` 스키마 리소스가 포함되어 있으므로, 소비자 프로젝트에서
@@ -28,6 +28,7 @@ Console.WriteLine($"Map: {trace.Map.Name}");
 Console.WriteLine($"BaseBuild: {trace.BaseBuild}");
 Console.WriteLine($"Players: {trace.Players.Count}");
 Console.WriteLine($"Events: {trace.Events.Count}");
+Console.WriteLine($"P1 Start: {trace.Players[0].StartLocation?.X}, {trace.Players[0].StartLocation?.Y}");
 
 var moves = trace.EventsOfKind(TraceEventKind.UnitMoved);
 ```
@@ -59,6 +60,8 @@ var header = new SchemaValueDecoder(
   MPQ 내부의 `replay.*` 원시 스트림을 `ReplayStreams`로 반환합니다.
 - `ReplayTrace`:
   맵/버전/플레이어/이벤트와 `RawData`(details, initData, game/message 이벤트 등)를 제공합니다.
+- `ReplayPlayer.StartLocation`:
+  트래커 초기 본진 생성 이벤트 기준 플레이어 시작 좌표(`UnitPosition`)를 제공합니다.
 - `ReplayTrace.EventsOfKind(...)`, `ReplayTrace.EventsForUnit(...)`:
   공통 조회 시나리오용 헬퍼입니다.
 
