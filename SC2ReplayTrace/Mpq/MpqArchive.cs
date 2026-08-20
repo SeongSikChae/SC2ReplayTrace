@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using ICSharpCode.SharpZipLib.BZip2;
 
 namespace Biz.Bizadm.SC2ReplayTrace.Mpq;
 
@@ -170,7 +171,7 @@ public sealed class MpqArchive : IDisposable
         return new MpqHash(0, 0, 0, uint.MaxValue);
     }
 
-    private byte[] Decompress(byte[] data, uint flags, int expected)
+    private static byte[] Decompress(byte[] data, uint flags, int expected)
     {
         if ((flags & (Compressed | Imploded)) == 0) return data;
         if ((flags & Imploded) != 0) throw new NotSupportedException("MPQ implode 압축은 지원하지 않습니다.");
@@ -178,13 +179,22 @@ public sealed class MpqArchive : IDisposable
         var compressionType = data[0];
         if (compressionType == 0) return data;
         if ((compressionType & 0x10) != 0)
-            return BZip2Decoder.Decode(data[1..]);
+            return DecodeBZip2(data.AsSpan(1));
         if (compressionType != 2)
             throw new NotSupportedException($"MPQ 압축 방식이 지원되지 않습니다: {compressionType}");
         using var input = new MemoryStream(data, 1, data.Length - 1, writable: false);
         using var deflate = new ZLibStream(input, CompressionMode.Decompress);
         using var output = new MemoryStream(expected > 0 ? expected : data.Length * 2);
         deflate.CopyTo(output);
+        return output.ToArray();
+    }
+
+    private static byte[] DecodeBZip2(ReadOnlySpan<byte> input)
+    {
+        using var source = new MemoryStream(input.ToArray(), writable: false);
+        using var bz2 = new BZip2InputStream(source);
+        using var output = new MemoryStream();
+        bz2.CopyTo(output);
         return output.ToArray();
     }
 
@@ -226,7 +236,7 @@ public sealed class MpqArchive : IDisposable
         return result;
     }
 
-    private void Decrypt(byte[] data, string keyText)
+    private static void Decrypt(byte[] data, string keyText)
     {
         var key = Hash(keyText, 3);
         var seed = 0xEEEEEEEEu;
